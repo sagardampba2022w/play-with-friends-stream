@@ -42,7 +42,7 @@ describe('useSnakeGame', () => {
       };
       const initialHead = { ...state.snake[0] };
       const newState = moveSnake(state);
-      
+
       expect(newState.snake[0].x).toBe(initialHead.x + 1);
       expect(newState.snake[0].y).toBe(initialHead.y);
     });
@@ -55,7 +55,7 @@ describe('useSnakeGame', () => {
       };
       const initialHead = { ...state.snake[0] };
       const newState = moveSnake(state);
-      
+
       expect(newState.snake[0].y).toBe(initialHead.y - 1);
     });
 
@@ -67,7 +67,7 @@ describe('useSnakeGame', () => {
       };
       const initialHead = { ...state.snake[0] };
       const newState = moveSnake(state);
-      
+
       expect(newState.snake[0].y).toBe(initialHead.y + 1);
     });
 
@@ -76,10 +76,11 @@ describe('useSnakeGame', () => {
         ...createInitialState(),
         status: 'playing',
         direction: 'LEFT',
+        snake: [{ x: 10, y: 10 }, { x: 11, y: 10 }, { x: 12, y: 10 }],
       };
       const initialHead = { ...state.snake[0] };
       const newState = moveSnake(state);
-      
+
       expect(newState.snake[0].x).toBe(initialHead.x - 1);
     });
 
@@ -91,7 +92,7 @@ describe('useSnakeGame', () => {
         snake: [{ x: 0, y: 10 }, { x: 1, y: 10 }, { x: 2, y: 10 }],
       };
       const newState = moveSnake(state);
-      
+
       expect(newState.status).toBe('game-over');
     });
 
@@ -103,7 +104,7 @@ describe('useSnakeGame', () => {
         snake: [{ x: 0, y: 10 }, { x: 1, y: 10 }, { x: 2, y: 10 }],
       };
       const newState = moveSnake(state);
-      
+
       expect(newState.status).toBe('playing');
       expect(newState.snake[0].x).toBe(19); // Wrapped to other side
     });
@@ -116,7 +117,7 @@ describe('useSnakeGame', () => {
         snake: [{ x: 10, y: 0 }, { x: 10, y: 1 }, { x: 10, y: 2 }],
       };
       const newState = moveSnake(state);
-      
+
       expect(newState.snake[0].y).toBe(19);
     });
 
@@ -135,7 +136,7 @@ describe('useSnakeGame', () => {
         ],
       };
       const newState = moveSnake(state);
-      
+
       expect(newState.status).toBe('game-over');
     });
 
@@ -148,7 +149,7 @@ describe('useSnakeGame', () => {
         food: { x: 11, y: 10 },
       };
       const newState = moveSnake(state);
-      
+
       expect(newState.score).toBe(10);
       expect(newState.snake.length).toBe(4);
     });
@@ -162,7 +163,7 @@ describe('useSnakeGame', () => {
         food: { x: 11, y: 10 },
       };
       const newState = moveSnake(state);
-      
+
       expect(newState.food).not.toEqual({ x: 11, y: 10 });
     });
   });

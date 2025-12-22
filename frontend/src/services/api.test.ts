@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { api } from './api';
 
 describe('API Service', () => {
@@ -12,7 +12,7 @@ describe('API Service', () => {
         email: 'player1@test.com',
         password: 'password123',
       });
-      
+
       expect(result.success).toBe(true);
       expect(result.data?.username).toBe('NeonViper');
     });
@@ -22,7 +22,7 @@ describe('API Service', () => {
         email: 'player1@test.com',
         password: 'wrongpassword',
       });
-      
+
       expect(result.success).toBe(false);
       expect(result.error).toBe('Invalid password');
     });
@@ -32,7 +32,7 @@ describe('API Service', () => {
         email: 'nonexistent@test.com',
         password: 'password123',
       });
-      
+
       expect(result.success).toBe(false);
       expect(result.error).toBe('User not found');
     });
@@ -43,7 +43,7 @@ describe('API Service', () => {
         password: 'newpassword123',
         username: 'NewPlayer',
       });
-      
+
       expect(result.success).toBe(true);
       expect(result.data?.username).toBe('NewPlayer');
       expect(result.data?.email).toBe('newuser@test.com');
@@ -55,7 +55,7 @@ describe('API Service', () => {
         password: 'password123',
         username: 'AnotherPlayer',
       });
-      
+
       expect(result.success).toBe(false);
       expect(result.error).toBe('Email already registered');
     });
@@ -65,7 +65,7 @@ describe('API Service', () => {
         email: 'newuser2@test.com',
         password: 'password123',
       });
-      
+
       expect(result.success).toBe(false);
       expect(result.error).toBe('Username is required');
     });
@@ -75,10 +75,10 @@ describe('API Service', () => {
         email: 'player1@test.com',
         password: 'password123',
       });
-      
+
       const result = await api.logout();
       expect(result.success).toBe(true);
-      
+
       const currentUser = await api.getCurrentUser();
       expect(currentUser.data).toBeNull();
     });
@@ -88,10 +88,10 @@ describe('API Service', () => {
         email: 'player1@test.com',
         password: 'password123',
       });
-      
+
       const stored = localStorage.getItem('user');
       expect(stored).not.toBeNull();
-      
+
       const parsed = JSON.parse(stored!);
       expect(parsed.username).toBe('NeonViper');
     });
@@ -100,7 +100,7 @@ describe('API Service', () => {
   describe('Leaderboard', () => {
     it('should get leaderboard', async () => {
       const result = await api.getLeaderboard();
-      
+
       expect(result.success).toBe(true);
       expect(result.data).toBeDefined();
       expect(result.data!.length).toBeGreaterThan(0);
@@ -108,7 +108,7 @@ describe('API Service', () => {
 
     it('should filter leaderboard by mode', async () => {
       const result = await api.getLeaderboard('walls');
-      
+
       expect(result.success).toBe(true);
       expect(result.data!.every(entry => entry.mode === 'walls')).toBe(true);
     });
@@ -118,9 +118,9 @@ describe('API Service', () => {
         email: 'player1@test.com',
         password: 'password123',
       });
-      
+
       const result = await api.submitScore(500, 'walls');
-      
+
       expect(result.success).toBe(true);
       expect(result.data?.score).toBe(500);
       expect(result.data?.username).toBe('NeonViper');
@@ -128,9 +128,9 @@ describe('API Service', () => {
 
     it('should fail to submit score when not logged in', async () => {
       await api.logout();
-      
+
       const result = await api.submitScore(500, 'walls');
-      
+
       expect(result.success).toBe(false);
       expect(result.error).toBe('Must be logged in to submit score');
     });
@@ -139,7 +139,7 @@ describe('API Service', () => {
   describe('Active Players', () => {
     it('should get active players', async () => {
       const result = await api.getActivePlayers();
-      
+
       expect(result.success).toBe(true);
       expect(result.data).toBeDefined();
       expect(result.data!.length).toBeGreaterThan(0);
@@ -147,14 +147,14 @@ describe('API Service', () => {
 
     it('should get active player by id', async () => {
       const result = await api.getActivePlayerById('active-1');
-      
+
       expect(result.success).toBe(true);
       expect(result.data?.username).toBe('LivePlayer42');
     });
 
     it('should return undefined for non-existent player', async () => {
       const result = await api.getActivePlayerById('non-existent');
-      
+
       expect(result.success).toBe(true);
       expect(result.data).toBeUndefined();
     });
@@ -172,14 +172,16 @@ describe('API Service', () => {
         direction: 'RIGHT' as const,
         status: 'playing' as const,
       };
-      
+
       const result = api.simulatePlayerMovement({ ...player }, 20);
-      
+
       // Snake should have moved
       expect(result.snake[0]).not.toEqual(player.snake[0]);
     });
 
     it('should wrap snake in pass-through mode', () => {
+      const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5); // Prevent random direction change
+
       const player = {
         id: 'test-1',
         username: 'TestPlayer',
@@ -190,11 +192,13 @@ describe('API Service', () => {
         direction: 'LEFT' as const,
         status: 'playing' as const,
       };
-      
+
       const result = api.simulatePlayerMovement({ ...player }, 20);
-      
+
       expect(result.snake[0].x).toBe(19);
       expect(result.status).toBe('playing');
+
+      randomSpy.mockRestore();
     });
   });
 });
