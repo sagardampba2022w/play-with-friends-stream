@@ -1,0 +1,22 @@
+.PHONY: install dev start test clean lint format
+
+# Install dependencies using uv
+install:
+	uv sync
+
+# Run development server with hot reload
+dev:
+	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Run production server
+start:
+	uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Run tests
+test:
+	uv run pytest
+
+# Clean up cache files
+clean:
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete

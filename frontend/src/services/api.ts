@@ -1,211 +1,155 @@
-import { User, LeaderboardEntry, ActivePlayer, AuthCredentials, ApiResponse, GameMode, Position, Direction, GameStatus } from '@/types/game';
+import { User, LeaderboardEntry, ActivePlayer, AuthCredentials, ApiResponse, GameMode } from '@/types/game';
 
-// Simulated delay to mimic network latency
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const API_URL = 'http://localhost:8000';
 
-// Mock data storage
-let currentUser: User | null = null;
-let users: Map<string, User & { password: string }> = new Map();
+// Helper for making API requests with auth token
+async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  const token = localStorage.getItem('token');
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...options.headers as object,
+  };
 
-// Initialize with some mock users
-users.set('player1@test.com', {
-  id: '1',
-  username: 'NeonViper',
-  email: 'player1@test.com',
-  password: 'password123',
-  highScore: 1250,
-  createdAt: '2024-01-15T10:00:00Z'
-});
+  if (token) {
+    (headers as any)['Authorization'] = `Bearer ${token}`;
+  }
 
-users.set('player2@test.com', {
-  id: '2',
-  username: 'CyberSnake',
-  email: 'player2@test.com',
-  password: 'password123',
-  highScore: 980,
-  createdAt: '2024-02-20T14:30:00Z'
-});
+  try {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
 
-// Mock leaderboard data
-const mockLeaderboard: LeaderboardEntry[] = [
-  { id: '1', username: 'NeonViper', score: 1250, mode: 'walls', date: '2024-12-20T15:30:00Z', rank: 1 },
-  { id: '2', username: 'PixelMaster', score: 1180, mode: 'walls', date: '2024-12-19T12:00:00Z', rank: 2 },
-  { id: '3', username: 'RetroGamer', score: 1050, mode: 'pass-through', date: '2024-12-21T09:15:00Z', rank: 3 },
-  { id: '4', username: 'CyberSnake', score: 980, mode: 'walls', date: '2024-12-18T18:45:00Z', rank: 4 },
-  { id: '5', username: 'ArcadeKing', score: 920, mode: 'pass-through', date: '2024-12-20T22:00:00Z', rank: 5 },
-  { id: '6', username: 'GlitchHunter', score: 850, mode: 'walls', date: '2024-12-17T11:30:00Z', rank: 6 },
-  { id: '7', username: 'ByteRunner', score: 780, mode: 'pass-through', date: '2024-12-16T16:20:00Z', rank: 7 },
-  { id: '8', username: 'CodeNinja', score: 720, mode: 'walls', date: '2024-12-15T20:10:00Z', rank: 8 },
-  { id: '9', username: 'DataDragon', score: 650, mode: 'pass-through', date: '2024-12-14T14:00:00Z', rank: 9 },
-  { id: '10', username: 'SynthWave', score: 580, mode: 'walls', date: '2024-12-13T08:45:00Z', rank: 10 },
-];
+    const data = await response.json();
 
-// Mock active players for watching
-const mockActivePlayers: ActivePlayer[] = [
-  {
-    id: 'active-1',
-    username: 'LivePlayer42',
-    score: 340,
-    mode: 'walls',
-    snake: [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }],
-    food: { x: 15, y: 12 },
-    direction: 'RIGHT',
-    status: 'playing'
-  },
-  {
-    id: 'active-2',
-    username: 'StreamSnake',
-    score: 520,
-    mode: 'pass-through',
-    snake: [{ x: 5, y: 8 }, { x: 5, y: 9 }, { x: 5, y: 10 }, { x: 5, y: 11 }],
-    food: { x: 12, y: 5 },
-    direction: 'UP',
-    status: 'playing'
-  },
-  {
-    id: 'active-3',
-    username: 'ProGamer99',
-    score: 890,
-    mode: 'walls',
-    snake: [{ x: 15, y: 15 }, { x: 14, y: 15 }, { x: 13, y: 15 }, { x: 12, y: 15 }, { x: 11, y: 15 }],
-    food: { x: 3, y: 7 },
-    direction: 'RIGHT',
-    status: 'playing'
-  },
-];
+    // Handle non-200 responses that might strictly be errors in a RESTful sense
+    // but our backend seems to return success: false for some logic errors even with 200/201.
+    // However, fastAPI might return 401/422 etc.
+    if (!response.ok) {
+      // Check if the response body has the standard error structure
+      if (data && data.detail) {
+        return { success: false, error: Array.isArray(data.detail) ? data.detail[0].msg : data.detail };
+      }
+      return { success: false, error: data.error || `Error ${response.status}: ${response.statusText}` };
+    }
+
+    return data;
+  } catch (error) {
+    console.error(`API Error for ${endpoint}:`, error);
+    return { success: false, error: 'Network error. Please try again.' };
+  }
+}
 
 // API Service
 export const api = {
   // Authentication
   async login(credentials: AuthCredentials): Promise<ApiResponse<User>> {
-    await delay(500);
-    
-    const user = users.get(credentials.email);
-    if (!user) {
-      return { success: false, error: 'User not found' };
+    const response = await fetchApi<User & { token: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+
+    if (response.success && (response as any).token) {
+      // The backend returns { success: true, data: User, token: string }
+      // We need to type cast or handle the response structure difference if T is strict
+      const { token } = response as any;
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(response.data));
     }
-    
-    if (user.password !== credentials.password) {
-      return { success: false, error: 'Invalid password' };
-    }
-    
-    const { password, ...userData } = user;
-    currentUser = userData;
-    localStorage.setItem('user', JSON.stringify(userData));
-    
-    return { success: true, data: userData };
+
+    return response;
   },
 
   async signup(credentials: AuthCredentials): Promise<ApiResponse<User>> {
-    await delay(500);
-    
-    if (users.has(credentials.email)) {
-      return { success: false, error: 'Email already registered' };
+    const response = await fetchApi<User>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+
+    // Auto-login is not explicitly in the backend signup response (it just returns user data),
+    // so the user might need to login manually or we fix the flow. 
+    // The previous mock implementation did auto-login locally.
+    // For now, let's stick to what the backend provides. 
+    // If the backend doesn't provide a token on signup, we can't auto-login unless we trigger a login call.
+    // Let's assume the user will need to log in, OR prompts the user.
+    // But to match the previous seamless experience, we might want to call login immediately.
+    // However, we don't have the password in plain text if we only have the credentials object passed in... 
+    // Wait, we DO have it in `credentials`.
+
+    if (response.success) {
+      // Optionally auto-login
+      return api.login({ email: credentials.email, password: credentials.password });
     }
-    
-    if (!credentials.username) {
-      return { success: false, error: 'Username is required' };
-    }
-    
-    const newUser: User & { password: string } = {
-      id: `user-${Date.now()}`,
-      username: credentials.username,
-      email: credentials.email,
-      password: credentials.password,
-      highScore: 0,
-      createdAt: new Date().toISOString()
-    };
-    
-    users.set(credentials.email, newUser);
-    
-    const { password, ...userData } = newUser;
-    currentUser = userData;
-    localStorage.setItem('user', JSON.stringify(userData));
-    
-    return { success: true, data: userData };
+
+    return response;
   },
 
   async logout(): Promise<ApiResponse<void>> {
-    await delay(200);
-    currentUser = null;
-    localStorage.removeItem('user');
-    return { success: true };
+    const response = await fetchApi<void>('/auth/logout', {
+      method: 'POST',
+    });
+
+    if (response.success) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+    return response;
   },
 
   async getCurrentUser(): Promise<ApiResponse<User | null>> {
-    await delay(100);
-    
-    if (currentUser) {
-      return { success: true, data: currentUser };
+    // If no token, don't bother fetching
+    if (!localStorage.getItem('token')) {
+      return { success: true, data: null };
     }
-    
-    const stored = localStorage.getItem('user');
-    if (stored) {
-      currentUser = JSON.parse(stored);
-      return { success: true, data: currentUser };
+
+    const response = await fetchApi<User>('/auth/me');
+
+    if (response.success && response.data) {
+      localStorage.setItem('user', JSON.stringify(response.data));
+    } else {
+      // If fetch fails (likely 401), clear local storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      // Return null user instead of error to match previous behavior of "not logged in"
+      return { success: true, data: null };
     }
-    
-    return { success: true, data: null };
+
+    return response;
   },
 
   // Leaderboard
   async getLeaderboard(mode?: GameMode): Promise<ApiResponse<LeaderboardEntry[]>> {
-    await delay(300);
-    
-    let entries = [...mockLeaderboard];
-    if (mode) {
-      entries = entries.filter(e => e.mode === mode);
-    }
-    
-    return { success: true, data: entries };
+    const query = mode ? `?mode=${mode}` : '';
+    return fetchApi<LeaderboardEntry[]>(`/leaderboard${query}`);
   },
 
   async submitScore(score: number, mode: GameMode): Promise<ApiResponse<LeaderboardEntry>> {
-    await delay(400);
-    
-    if (!currentUser) {
-      return { success: false, error: 'Must be logged in to submit score' };
-    }
-    
-    const entry: LeaderboardEntry = {
-      id: `score-${Date.now()}`,
-      username: currentUser.username,
-      score,
-      mode,
-      date: new Date().toISOString(),
-      rank: 0
-    };
-    
-    // Update high score if applicable
-    if (score > currentUser.highScore) {
-      currentUser.highScore = score;
-      localStorage.setItem('user', JSON.stringify(currentUser));
-    }
-    
-    mockLeaderboard.push(entry);
-    mockLeaderboard.sort((a, b) => b.score - a.score);
-    mockLeaderboard.forEach((e, i) => e.rank = i + 1);
-    
-    return { success: true, data: entry };
+    return fetchApi<LeaderboardEntry>('/leaderboard', {
+      method: 'POST',
+      body: JSON.stringify({ score, mode }),
+    });
   },
 
   // Active Players / Watching
   async getActivePlayers(): Promise<ApiResponse<ActivePlayer[]>> {
-    await delay(200);
-    return { success: true, data: [...mockActivePlayers] };
+    return fetchApi<ActivePlayer[]>('/active-players');
   },
 
   async getActivePlayerById(id: string): Promise<ApiResponse<ActivePlayer | undefined>> {
-    await delay(100);
-    const player = mockActivePlayers.find(p => p.id === id);
-    return { success: true, data: player };
+    return fetchApi<ActivePlayer | undefined>(`/active-players/${id}`);
   },
 
   // Simulate player movement for watching
+  // This logic is client-side simulation for the "watch" mode if the backend doesn't stream updates yet.
+  // We can keep the previous logic or rely on repeated polling.
+  // Since the backend `active-players` endpoints seem static in the spec (REST), 
+  // real-time updates might need polling or websockets.
+  // For now, I will KEEP the client-side simulation logic to ensure the "watch" feature doesn't break 
+  // until we have a real streaming solution.
   simulatePlayerMovement(player: ActivePlayer, gridSize: number): ActivePlayer {
     const head = { ...player.snake[0] };
-    const directions: Direction[] = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
-    
+    const directions: ('UP' | 'DOWN' | 'LEFT' | 'RIGHT')[] = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
+
     // Sometimes change direction
     if (Math.random() < 0.2) {
       const validDirections = directions.filter(d => {
@@ -217,7 +161,7 @@ export const api = {
       });
       player.direction = validDirections[Math.floor(Math.random() * validDirections.length)];
     }
-    
+
     // Move head
     switch (player.direction) {
       case 'UP': head.y -= 1; break;
@@ -225,7 +169,7 @@ export const api = {
       case 'LEFT': head.x -= 1; break;
       case 'RIGHT': head.x += 1; break;
     }
-    
+
     // Handle wrapping for pass-through mode
     if (player.mode === 'pass-through') {
       if (head.x < 0) head.x = gridSize - 1;
@@ -233,10 +177,10 @@ export const api = {
       if (head.y < 0) head.y = gridSize - 1;
       if (head.y >= gridSize) head.y = 0;
     }
-    
+
     // Check if food eaten
     const ateFood = head.x === player.food.x && head.y === player.food.y;
-    
+
     const newSnake = [head, ...player.snake];
     if (!ateFood) {
       newSnake.pop();
@@ -247,14 +191,14 @@ export const api = {
         y: Math.floor(Math.random() * gridSize)
       };
     }
-    
+
     // Check for collision in walls mode
     if (player.mode === 'walls') {
       if (head.x < 0 || head.x >= gridSize || head.y < 0 || head.y >= gridSize) {
         player.status = 'game-over';
       }
     }
-    
+
     player.snake = newSnake;
     return player;
   }
