@@ -14,7 +14,7 @@ start:
 
 # Run tests
 test:
-	uv run pytest
+	PYTHONPATH=. uv run pytest
 
 # Clean up cache files
 clean:
