@@ -1,6 +1,9 @@
 import { User, LeaderboardEntry, ActivePlayer, AuthCredentials, ApiResponse, GameMode } from '@/types/game';
 
-const API_URL = 'http://localhost:8000';
+// For Single Container Deployment, API is at /api
+// For local dev with distinct ports, we might need configuration, but the proxy setup also used /api.
+// So /api is the standard now.
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Helper for making API requests with auth token
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {

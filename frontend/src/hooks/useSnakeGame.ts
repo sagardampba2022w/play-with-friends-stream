@@ -110,7 +110,7 @@ export const moveSnake = (state: GameState): GameState => {
 
 export const changeDirection = (state: GameState, newDirection: Direction): GameState => {
   if (state.status !== 'playing') return state;
-  
+
   // Prevent 180-degree turns
   if (newDirection === getOppositeDirection(state.direction)) {
     return state;
@@ -167,6 +167,15 @@ export const useSnakeGame = (initialMode: GameMode = 'walls') => {
       D: 'RIGHT',
     };
 
+    // Ignore if typing in an input
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement ||
+      (e.target as HTMLElement).isContentEditable
+    ) {
+      return;
+    }
+
     const direction = keyDirectionMap[e.key];
     if (direction) {
       e.preventDefault();
@@ -192,7 +201,7 @@ export const useSnakeGame = (initialMode: GameMode = 'walls') => {
     gameLoopRef.current = setInterval(() => {
       setGameState(prev => {
         let newState = prev;
-        
+
         // Process one direction from queue
         while (directionQueueRef.current.length > 0) {
           const nextDirection = directionQueueRef.current.shift()!;
@@ -201,7 +210,7 @@ export const useSnakeGame = (initialMode: GameMode = 'walls') => {
             break;
           }
         }
-        
+
         return moveSnake(newState);
       });
     }, gameState.speed);
