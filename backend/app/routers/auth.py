@@ -3,10 +3,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
-from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db import db, UserInDB
-from ..models import AuthCredentials, User, ApiResponse
+from ..db import get_db
+from ..models import AuthCredentials, User, UserCreate, UserRead, ApiResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -23,7 +24,10 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    session: AsyncSession = Depends(get_db)
+) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -37,51 +41,62 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     except jwt.PyJWTError:
         raise credentials_exception
     
-    user = db.get_user_by_email(email)
+    result = await session.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    
     if user is None:
         raise credentials_exception
     return user
 
-@router.post("/signup", status_code=status.HTTP_201_CREATED)
-async def signup(credentials: AuthCredentials):
-    if db.get_user_by_email(credentials.email):
+@router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=ApiResponse)
+async def signup(credentials: AuthCredentials, session: AsyncSession = Depends(get_db)):
+    # Check if user exists
+    result = await session.execute(select(User).where(User.email == credentials.email))
+    existing_user = result.scalar_one_or_none()
+    
+    if existing_user:
         return {"success": False, "error": "Email already registered"}
-        # Note: OpenAPI spec says 400 for error, but consistency with frontend requires careful response structure. 
-        # Using 201 for success, but effectively handling error scenarios.
     
     if not credentials.username:
          return {"success": False, "error": "Username is required"}
 
-    new_user = UserInDB(
-        id=f"user-{datetime.now().timestamp()}",
+    new_user = User(
         username=credentials.username,
         email=credentials.email,
         password=credentials.password,
         highScore=0,
         createdAt=datetime.now()
     )
-    db.create_user(new_user)
+    session.add(new_user)
+    await session.commit()
+    await session.refresh(new_user)
     
-    # Return structure matching ApiResponse<User>
+    # Return structure matching ApiResponse
+    # We transform SQLAlchemy model to Pydantic UserRead manully or via automated conversion if configured.
+    # ApiResponse data expects object, but UserRead is a Pydantic model.
+    # We can just return new_user and let FastAPI serialization handle it if we typed it correctly, 
+    # but ApiResponse data is Optional[object]. 
+    # Let's verify serialization.
+    
     return {
         "success": True,
-        "data": new_user
+        "data": UserRead.model_validate(new_user)
     }
 
 @router.post("/login")
-async def login(credentials: AuthCredentials):
-    user = db.get_user_by_email(credentials.email)
+async def login(credentials: AuthCredentials, session: AsyncSession = Depends(get_db)):
+    result = await session.execute(select(User).where(User.email == credentials.email))
+    user = result.scalar_one_or_none()
+
     if not user or user.password != credentials.password:
-        return {"success": False, "error": "Invalid credentials"} # Frontend expects this or 401? Spec says 401 but frontend code might expect success: false
-        # Adjusting to match probable frontend expectation of 200 OK with success: false for invalid creds based on typical fetch usage, 
-        # or actually strictly following REST where 401 is appropriate. 
-        # However, looking at api.ts: `return { success: false, error: 'Invalid password' };`
-        # This implies the HTTP call succeeds (200) but returns a payload indicating failure.
+        return {"success": False, "error": "Invalid credentials"}
     
     access_token = create_access_token(data={"sub": user.email})
+    
+    # We construct the response. UserRead handles excluding password.
     return {
         "success": True,
-        "data": user,
+        "data": UserRead.model_validate(user),
         "token": access_token
     }
 
@@ -89,6 +104,6 @@ async def login(credentials: AuthCredentials):
 async def logout(current_user: Annotated[User, Depends(get_current_user)]):
     return {"success": True}
 
-@router.get("/me")
+@router.get("/me", response_model=ApiResponse)
 async def read_users_me(current_user: Annotated[User, Depends(get_current_user)]):
-    return {"success": True, "data": current_user}
+    return {"success": True, "data": UserRead.model_validate(current_user)}

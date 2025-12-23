@@ -148,3 +148,8 @@ cython_debug/
 
 # OS specific files
 .DS_Store
+
+# Local Databases
+*.db
+*.sqlite
+*.sqlite3-journal
