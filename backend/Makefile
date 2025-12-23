@@ -16,6 +16,14 @@ start:
 test:
 	PYTHONPATH=. uv run pytest
 
+# Run only unit tests
+test-unit:
+	PYTHONPATH=. uv run pytest tests/
+
+# Run only integration tests
+test-integration:
+	PYTHONPATH=. uv run pytest tests_integration/
+
 # Clean up cache files
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
