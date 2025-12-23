@@ -7,6 +7,10 @@ from sqlalchemy.orm import DeclarativeBase
 # Default to SQLite for local development
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
 
+# Render provides postgresql:// but we need postgresql+asyncpg:// for async SQLAlchemy
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
 # Create Async Engine
 engine = create_async_engine(
     DATABASE_URL,
