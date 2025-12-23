@@ -19,12 +19,12 @@ async def test_full_user_journey(client):
         "username": "AliceWrapper",
         "password": "password123"
     }
-    res = await client.post("/auth/signup", json=user_a)
+    res = await client.post("/api/auth/signup", json=user_a)
     assert res.status_code == 201
     assert res.json()["success"] is True
 
     # Login User A
-    res = await client.post("/auth/login", json={"email": user_a["email"], "password": user_a["password"]})
+    res = await client.post("/api/auth/login", json={"email": user_a["email"], "password": user_a["password"]})
     token_a = res.json()["token"]
 
     # 2. Register User B
@@ -33,16 +33,16 @@ async def test_full_user_journey(client):
         "username": "BobBuilder",
         "password": "password123"
     }
-    res = await client.post("/auth/signup", json=user_b)
+    res = await client.post("/api/auth/signup", json=user_b)
     assert res.status_code == 201
 
     # Login User B
-    res = await client.post("/auth/login", json={"email": user_b["email"], "password": user_b["password"]})
+    res = await client.post("/api/auth/login", json={"email": user_b["email"], "password": user_b["password"]})
     token_b = res.json()["token"]
 
     # 3. User A posts score (Score: 100)
     res = await client.post(
-        "/leaderboard", 
+        "/api/leaderboard", 
         json={"score": 100, "mode": "walls"},
         headers={"Authorization": f"Bearer {token_a}"}
     )
@@ -51,7 +51,7 @@ async def test_full_user_journey(client):
 
     # 4. User B posts lower score (Score: 50)
     res = await client.post(
-        "/leaderboard", 
+        "/api/leaderboard", 
         json={"score": 50, "mode": "walls"},
         headers={"Authorization": f"Bearer {token_b}"}
     )
@@ -62,7 +62,7 @@ async def test_full_user_journey(client):
     assert res.json()["data"]["rank"] == 2
 
     # 5. Verify Leaderboard
-    res = await client.get("/leaderboard?mode=walls")
+    res = await client.get("/api/leaderboard?mode=walls")
     leaderboard = res.json()["data"]
     assert len(leaderboard) >= 2
     assert leaderboard[0]["username"] == "AliceWrapper"
@@ -72,7 +72,7 @@ async def test_full_user_journey(client):
 
     # 6. User B improves score (Score: 200)
     res = await client.post(
-        "/leaderboard", 
+        "/api/leaderboard", 
         json={"score": 200, "mode": "walls"},
         headers={"Authorization": f"Bearer {token_b}"}
     )
@@ -81,7 +81,7 @@ async def test_full_user_journey(client):
     assert res.json()["data"]["rank"] == 1
 
     # 7. Verify Leaderboard again
-    res = await client.get("/leaderboard?mode=walls")
+    res = await client.get("/api/leaderboard?mode=walls")
     leaderboard = res.json()["data"]
     assert leaderboard[0]["username"] == "BobBuilder"
     assert leaderboard[0]["score"] == 200
